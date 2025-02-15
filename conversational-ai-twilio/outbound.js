@@ -4,6 +4,8 @@ import dotenv from 'dotenv';
 import Fastify from 'fastify';
 import Twilio from 'twilio';
 import WebSocket from 'ws';
+import fs from 'fs'; // <-- Added for writing JSON files
+import path from 'path';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -34,6 +36,70 @@ fastify.register(fastifyFormBody);
 fastify.register(fastifyWs);
 
 const PORT = process.env.PORT || 8000;
+
+// In-memory log storage: { callSid: [ { timestamp, speaker, message }, ... ] }
+const callLogs = {};
+
+/** 
+ * Helper function to record a log event in memory
+ * @param {string} callSid - The unique call ID
+ * @param {string} speaker - e.g., '[Twilio]', '[ElevenLabs]', 'User'
+ * @param {string} message - The message to store
+ */
+function logEvent(callSid, speaker, message) {
+  if (!callSid) return; // Only log if we actually have a callSid
+  if (!callLogs[callSid]) {
+    callLogs[callSid] = [];
+  }
+  callLogs[callSid].push({
+    timestamp: new Date().toISOString(),
+    speaker,
+    message,
+  });
+}
+
+function logToFile(conversationId, message) {
+  if (!conversationId) {
+    console.error('No conversationId provided for logging');
+    return;
+  }
+
+  try {
+    // Create logs directory in the project root
+    const logsDir = path.join(process.cwd(), 'logs');
+    console.log('Logs directory path:', logsDir);
+
+    if (!fs.existsSync(logsDir)) {
+      console.log('Creating logs directory...');
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+
+    const logFile = path.join(logsDir, `${conversationId}.txt`);
+    console.log('Writing to log file:', logFile);
+
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] ${message}\n`;
+
+    // Use synchronous write to ensure message is written
+    fs.appendFileSync(logFile, logMessage, { encoding: 'utf8' });
+
+    // Verify file was written
+    if (fs.existsSync(logFile)) {
+      const stats = fs.statSync(logFile);
+      console.log(`Log file created/updated. Size: ${stats.size} bytes`);
+    } else {
+      console.error('Failed to verify log file creation');
+    }
+  } catch (error) {
+    console.error('Error writing to log file:', error);
+    console.error('Error details:', {
+      conversationId,
+      currentDirectory: process.cwd(),
+      error: error.message,
+      stack: error.stack
+    });
+  }
+}
 
 // Root route for health check
 fastify.get('/', async (_, reply) => {
@@ -106,12 +172,12 @@ fastify.all('/outbound-call-twiml', async (request, reply) => {
 
   const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
     <Response>
-        <Connect>
+      <Connect>
         <Stream url="wss://${request.headers.host}/outbound-media-stream">
-            <Parameter name="prompt" value="${prompt}" />
-            <Parameter name="first_message" value="${first_message}" />
+          <Parameter name="prompt" value="${prompt}" />
+          <Parameter name="first_message" value="${first_message}" />
         </Stream>
-        </Connect>
+      </Connect>
     </Response>`;
 
   reply.type('text/xml').send(twimlResponse);
@@ -122,16 +188,13 @@ fastify.register(async (fastifyInstance) => {
   fastifyInstance.get('/outbound-media-stream', { websocket: true }, (ws, req) => {
     console.info('[Server] Twilio connected to outbound media stream');
 
-    // Variables to track the call
     let streamSid = null;
     let callSid = null;
     let elevenLabsWs = null;
-    let customParameters = null; // Add this to store parameters
+    let customParameters = null;
 
-    // Handle WebSocket errors
     ws.on('error', console.error);
 
-    // Set up ElevenLabs connection
     const setupElevenLabs = async () => {
       try {
         const signedUrl = await getSignedUrl();
@@ -139,8 +202,8 @@ fastify.register(async (fastifyInstance) => {
 
         elevenLabsWs.on('open', () => {
           console.log('[ElevenLabs] Connected to Conversational AI');
+          logEvent(callSid, '[ElevenLabs]', 'Connected to Conversational AI');
 
-          // Send initial configuration with prompt and first message
           const initialConfig = {
             type: 'conversation_initiation_client_data',
             conversation_config_override: {
@@ -158,8 +221,14 @@ fastify.register(async (fastifyInstance) => {
             '[ElevenLabs] Sending initial config with prompt:',
             initialConfig.conversation_config_override.agent.prompt.prompt
           );
+          logEvent(
+            callSid,
+            '[ElevenLabs]',
+            `Sending initial config with prompt: ${
+              initialConfig.conversation_config_override.agent.prompt.prompt
+            }`
+          );
 
-          // Send the configuration to ElevenLabs
           elevenLabsWs.send(JSON.stringify(initialConfig));
         });
 
@@ -170,6 +239,7 @@ fastify.register(async (fastifyInstance) => {
             switch (message.type) {
               case 'conversation_initiation_metadata':
                 console.log('[ElevenLabs] Received initiation metadata');
+                logEvent(callSid, '[ElevenLabs]', 'Received initiation metadata');
                 break;
 
               case 'audio':
@@ -195,6 +265,11 @@ fastify.register(async (fastifyInstance) => {
                   }
                 } else {
                   console.log('[ElevenLabs] Received audio but no StreamSid yet');
+                  logEvent(
+                    callSid,
+                    '[ElevenLabs]',
+                    'Received audio but no StreamSid yet'
+                  );
                 }
                 break;
 
@@ -224,52 +299,80 @@ fastify.register(async (fastifyInstance) => {
                 console.log(
                   `[Twilio] Agent response: ${message.agent_response_event?.agent_response}`
                 );
+                logEvent(
+                  callSid,
+                  '[Twilio]',
+                  `Agent response: ${message.agent_response_event?.agent_response}`
+                );
                 break;
 
               case 'user_transcript':
                 console.log(
                   `[Twilio] User transcript: ${message.user_transcription_event?.user_transcript}`
                 );
+                logEvent(
+                  callSid,
+                  'User',
+                  message.user_transcription_event?.user_transcript || ''
+                );
                 break;
 
               default:
                 console.log(`[ElevenLabs] Unhandled message type: ${message.type}`);
+                logEvent(
+                  callSid,
+                  '[ElevenLabs]',
+                  `Unhandled message type: ${message.type}`
+                );
             }
           } catch (error) {
             console.error('[ElevenLabs] Error processing message:', error);
+            logEvent(callSid, '[ElevenLabs]', `Error: ${error}`);
           }
         });
 
         elevenLabsWs.on('error', (error) => {
           console.error('[ElevenLabs] WebSocket error:', error);
+          logEvent(callSid, '[ElevenLabs]', `WebSocket error: ${error.message}`);
         });
 
         elevenLabsWs.on('close', () => {
           console.log('[ElevenLabs] Disconnected');
+          logEvent(callSid, '[ElevenLabs]', 'Disconnected');
         });
       } catch (error) {
         console.error('[ElevenLabs] Setup error:', error);
+        logEvent(callSid, '[ElevenLabs]', `Setup error: ${error.message}`);
       }
     };
 
-    // Set up ElevenLabs connection
     setupElevenLabs();
 
-    // Handle messages from Twilio
     ws.on('message', (message) => {
       try {
         const msg = JSON.parse(message);
         if (msg.event !== 'media') {
           console.log(`[Twilio] Received event: ${msg.event}`);
+          logEvent(callSid, '[Twilio]', `Received event: ${msg.event}`);
         }
 
         switch (msg.event) {
           case 'start':
             streamSid = msg.start.streamSid;
             callSid = msg.start.callSid;
-            customParameters = msg.start.customParameters; // Store parameters
-            console.log(`[Twilio] Stream started - StreamSid: ${streamSid}, CallSid: ${callSid}`);
-            console.log('[Twilio] Start parameters:', customParameters);
+            customParameters = msg.start.customParameters;
+            console.log(
+              `[Twilio] Stream started - StreamSid: ${streamSid}, CallSid: ${callSid}`
+            );
+            logEvent(
+              callSid,
+              '[Twilio]',
+              `Stream started - StreamSid: ${streamSid}, CallSid: ${callSid}`
+            );
+            if (customParameters) {
+              console.log('[Twilio] Start parameters:', customParameters);
+              logEvent(callSid, '[Twilio]', `Start parameters: ${JSON.stringify(customParameters)}`);
+            }
             break;
 
           case 'media':
@@ -283,6 +386,7 @@ fastify.register(async (fastifyInstance) => {
 
           case 'stop':
             console.log(`[Twilio] Stream ${streamSid} ended`);
+            logEvent(callSid, '[Twilio]', `Stream ${streamSid} ended`);
             if (elevenLabsWs?.readyState === WebSocket.OPEN) {
               elevenLabsWs.close();
             }
@@ -290,17 +394,32 @@ fastify.register(async (fastifyInstance) => {
 
           default:
             console.log(`[Twilio] Unhandled event: ${msg.event}`);
+            logEvent(callSid, '[Twilio]', `Unhandled event: ${msg.event}`);
         }
       } catch (error) {
         console.error('[Twilio] Error processing message:', error);
+        logEvent(callSid, '[Twilio]', `Error processing message: ${error.message}`);
       }
     });
 
-    // Handle WebSocket closure
     ws.on('close', () => {
       console.log('[Twilio] Client disconnected');
+      logEvent(callSid, '[Twilio]', 'Client disconnected');
+
       if (elevenLabsWs?.readyState === WebSocket.OPEN) {
         elevenLabsWs.close();
+      }
+
+      if (callSid && callLogs[callSid]) {
+        const outputFile = `conversation-${callSid}.json`;
+        fs.writeFileSync(
+          outputFile,
+          JSON.stringify({ conversation: callLogs[callSid] }, null, 2),
+          'utf-8'
+        );
+        console.log(`[Server] Conversation for CallSid ${callSid} written to ${outputFile}`);
+
+        delete callLogs[callSid];
       }
     });
   });

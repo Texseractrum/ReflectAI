@@ -2,10 +2,6 @@ import requests
 
 def make_outbound_call(ngrok_url, phone_number, agent_name, business_name, service_provided, user_name):
     url = f"{ngrok_url}/outbound-call"
-    agent_name = "Hope"
-    business_name = "BigBoards"
-    service_provided = "Motherboard Repair"
-    user_name = "Vladimir"
     
     payload = {
         "prompt": (
@@ -26,16 +22,30 @@ def make_outbound_call(ngrok_url, phone_number, agent_name, business_name, servi
     
     response = requests.post(url, json=payload, headers=headers)
     if response.status_code == 200:
-        return True
-    return False
+        try:
+            data = response.json()
+            # Try to get conversation_id first, fall back to callSid if needed
+            conversation_id = data.get('conversation_id') or data.get('callSid')
+            if conversation_id:
+                print(f"Debug - Full response: {data}")  # Debug line
+                return True, conversation_id
+            return False, None
+        except (ValueError, AttributeError) as e:
+            print(f"Error parsing response: {e}")  # Debug line
+            return False, None
+    print(f"Request failed with status code: {response.status_code}")  # Debug line
+    return False, None
 
 # Example usage
 if __name__ == "__main__":
     ngrok_url = "https://dad6-77-241-76-112.ngrok-free.app"  # Replace with your actual ngrok URL
     phone_number = "+447341366667"  # Replace with the actual phone number
-    
-    success = make_outbound_call(ngrok_url, phone_number)
+    agent_name = "Hope"
+    business_name = "BigBoards"
+    service_provided = "Motherboard Repair"
+    user_name = "Vladimir"
+    success, conversation_id = make_outbound_call(ngrok_url, phone_number, agent_name, business_name, service_provided, user_name)
     if success:
-        print("Call initiated successfully")
+        print(f"Call initiated successfully. Conversation ID: {conversation_id}")
     else:
         print("Failed to initiate call") 
