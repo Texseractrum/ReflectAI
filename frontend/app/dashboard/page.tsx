@@ -53,12 +53,15 @@ type Status =
 type SortDirection = "asc" | "desc" | null;
 
 interface Interaction {
-  id: number;
-  date: string;
-  type: "call" | "email" | "meeting";
+  id?: number;
+  date?: string;
+  type?: "call" | "email" | "meeting";
   duration?: string;
+  satisfaction_score: number;
+  key_points: string[];
+  action_items: string[];
+  areas_for_improvement: string[];
   summary: string;
-  outcome: string;
 }
 
 interface Client {
@@ -87,16 +90,28 @@ const clients: Client[] = [
         id: 1,
         date: "2024-03-15",
         type: "call",
-        duration: "15 minutes",
-        summary: "Discussed investment portfolio optimization",
-        outcome: "Client requested detailed proposal",
-      },
-      {
-        id: 2,
-        date: "2024-03-10",
-        type: "email",
-        summary: "Sent initial service offering details",
-        outcome: "Client expressed interest in financial planning services",
+        duration: "3 minutes",
+        satisfaction_score: 7,
+        key_points: [
+          "Customer appreciates the check-in call",
+          "Replacement of the motherboard went smoothly",
+          "Customer is in the process of testing features",
+        ],
+        action_items: [
+          "Follow up with the customer to gather more detailed feedback after testing",
+          "Ensure customer support is available for any potential issues during testing",
+        ],
+        areas_for_improvement: [
+          "Shorten the time between repair completion and follow-up to capture immediate feedback",
+          "Provide more detailed instructions or resources on how to test specific features post-repair",
+        ],
+        summary: [
+          "The conversation indicates a moderate level of customer satisfaction with a score of 7.",
+          "The customer acknowledged a smooth motherboard replacement process and showed appreciation for the follow-up call.",
+          "Since the customer is still testing the features, comprehensive feedback is pending.",
+          "Immediate action items include preparing for detailed feedback collection post-testing and ensuring robust post-repair support.",
+          "Areas for improvement suggest a need for more proactive engagement and resources sharing directly after the service to enhance the testing phase and potentially increase customer satisfaction.",
+        ].join(" "),
       },
     ],
   },
@@ -108,16 +123,7 @@ const clients: Client[] = [
     email: "sarah@digitaldynamics.com",
     lastContact: "2024-03-14",
     status: "to_be_processed",
-    interactions: [
-      {
-        id: 1,
-        date: "2024-03-14",
-        type: "meeting",
-        duration: "45 minutes",
-        summary: "Reviewed marketing strategy proposal",
-        outcome: "Client approved the proposed plan",
-      },
-    ],
+    interactions: [],
   },
   {
     id: 3,
@@ -127,16 +133,7 @@ const clients: Client[] = [
     email: "michael@innovatelabs.com",
     lastContact: "2024-03-16",
     status: "to_be_processed",
-    interactions: [
-      {
-        id: 1,
-        date: "2024-03-16",
-        type: "call",
-        duration: "30 minutes",
-        summary: "Technical requirements gathering",
-        outcome: "In progress",
-      },
-    ],
+    interactions: [],
   },
 ];
 
@@ -187,6 +184,18 @@ export default function Dashboard() {
     if (storedData) {
       setCompanyData(JSON.parse(storedData));
     }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setClientsList((prevClients) =>
+        prevClients.map((client) =>
+          client.id === 1 ? { ...client, status: "received_feedback" } : client
+        )
+      );
+    }, 60000);
+
+    return () => clearTimeout(timer);
   }, []);
 
   const toggleClientSelection = (clientId: number) => {
@@ -585,6 +594,16 @@ export default function Dashboard() {
                   key={client.id}
                   className="cursor-pointer"
                   onClick={() => {
+                    if (
+                      client.id === 1 &&
+                      client.status === "received_feedback"
+                    ) {
+                      setClientsList((prevClients) =>
+                        prevClients.map((c) =>
+                          c.id === 1 ? { ...c, status: "complete" } : c
+                        )
+                      );
+                    }
                     setSelectedClientForHistory(client);
                     setIsHistoryDialogOpen(true);
                   }}
@@ -633,9 +652,10 @@ export default function Dashboard() {
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg">
-                        {interaction.type.charAt(0).toUpperCase() +
-                          interaction.type.slice(1)}
-                        {interaction.duration && ` - ${interaction.duration}`}
+                        {interaction.type?.charAt(0).toUpperCase() +
+                          (interaction.type
+                            ? ` - ${interaction.duration}`
+                            : "")}
                       </CardTitle>
                       <span className="text-sm text-muted-foreground">
                         {interaction.date}
@@ -647,10 +667,6 @@ export default function Dashboard() {
                       <div>
                         <span className="font-medium">Summary: </span>
                         {interaction.summary}
-                      </div>
-                      <div>
-                        <span className="font-medium">Outcome: </span>
-                        {interaction.outcome}
                       </div>
                     </div>
                   </CardContent>
