@@ -14,7 +14,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -173,3 +172,4 @@ cython_debug/
 
 frontend/node_modules
 conversational-ai-twilio/node_modules
+frontend/.next
