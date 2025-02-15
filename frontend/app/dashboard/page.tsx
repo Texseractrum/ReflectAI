@@ -44,7 +44,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 
-type Status = "waiting_reply" | "received_feedback" | "currently_calling";
+type Status =
+  | "waiting_reply"
+  | "received_feedback"
+  | "currently_calling"
+  | "complete"
+  | "to_be_processed";
 type SortDirection = "asc" | "desc" | null;
 
 interface Interaction {
@@ -71,12 +76,12 @@ interface Client {
 const clients: Client[] = [
   {
     id: 1,
-    name: "John Smith",
-    description: "Financial Advisory Services",
+    name: "Daniil Bekirov",
+    description: "Motherboard Repair",
     phone: "+447341366667",
-    email: "john@techsolutions.com",
+    email: "bekirov.aida@gmail.com",
     lastContact: "2024-03-15",
-    status: "waiting_reply",
+    status: "to_be_processed",
     interactions: [
       {
         id: 1,
@@ -84,16 +89,16 @@ const clients: Client[] = [
         type: "call",
         duration: "15 minutes",
         summary: "Discussed investment portfolio optimization",
-        outcome: "Client requested detailed proposal"
+        outcome: "Client requested detailed proposal",
       },
       {
         id: 2,
         date: "2024-03-10",
         type: "email",
         summary: "Sent initial service offering details",
-        outcome: "Client expressed interest in financial planning services"
-      }
-    ]
+        outcome: "Client expressed interest in financial planning services",
+      },
+    ],
   },
   {
     id: 2,
@@ -102,7 +107,7 @@ const clients: Client[] = [
     phone: "+1 (555) 987-6543",
     email: "sarah@digitaldynamics.com",
     lastContact: "2024-03-14",
-    status: "received_feedback",
+    status: "to_be_processed",
     interactions: [
       {
         id: 1,
@@ -110,9 +115,9 @@ const clients: Client[] = [
         type: "meeting",
         duration: "45 minutes",
         summary: "Reviewed marketing strategy proposal",
-        outcome: "Client approved the proposed plan"
-      }
-    ]
+        outcome: "Client approved the proposed plan",
+      },
+    ],
   },
   {
     id: 3,
@@ -121,7 +126,7 @@ const clients: Client[] = [
     phone: "+1 (555) 456-7890",
     email: "michael@innovatelabs.com",
     lastContact: "2024-03-16",
-    status: "currently_calling",
+    status: "to_be_processed",
     interactions: [
       {
         id: 1,
@@ -129,13 +134,17 @@ const clients: Client[] = [
         type: "call",
         duration: "30 minutes",
         summary: "Technical requirements gathering",
-        outcome: "In progress"
-      }
-    ]
-  }
+        outcome: "In progress",
+      },
+    ],
+  },
 ];
 
 const statusConfig = {
+  to_be_processed: {
+    label: "To Be Processed",
+    color: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300",
+  },
   waiting_reply: {
     label: "Waiting Reply",
     color:
@@ -143,11 +152,16 @@ const statusConfig = {
   },
   received_feedback: {
     label: "Received Feedback",
-    color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
+    color:
+      "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
   },
   currently_calling: {
     label: "Currently Calling",
     color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
+  },
+  complete: {
+    label: "Complete",
+    color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
   },
 };
 
@@ -163,8 +177,10 @@ export default function Dashboard() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<Status[]>([]);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
-  const [selectedClientForHistory, setSelectedClientForHistory] = useState<Client | null>(null);
+  const [selectedClientForHistory, setSelectedClientForHistory] =
+    useState<Client | null>(null);
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
+  const [clientsList, setClientsList] = useState<Client[]>(clients);
 
   useEffect(() => {
     const storedData = localStorage.getItem("companyData");
@@ -182,7 +198,7 @@ export default function Dashboard() {
   };
 
   const getStatusCounts = () => {
-    return clients.reduce((acc, client) => {
+    return clientsList.reduce((acc, client) => {
       acc[client.status] = (acc[client.status] || 0) + 1;
       return acc;
     }, {} as Record<Status, number>);
@@ -206,6 +222,8 @@ export default function Dashboard() {
         currently_calling: 1,
         waiting_reply: 2,
         received_feedback: 3,
+        to_be_processed: 4,
+        complete: 5,
       };
 
       const comparison = statusOrder[a.status] - statusOrder[b.status];
@@ -214,7 +232,7 @@ export default function Dashboard() {
   };
 
   const filteredClients = sortClients(
-    clients.filter((client) => {
+    clientsList.filter((client) => {
       const matchesSearch =
         client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         client.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -260,7 +278,9 @@ export default function Dashboard() {
 
     // Process each selected client
     for (const clientId of selectedClients) {
-      const selectedClient = clients.find((client) => client.id === clientId);
+      const selectedClient = clientsList.find(
+        (client) => client.id === clientId
+      );
       if (!selectedClient) {
         console.log("Selected client not found:", clientId);
         continue;
@@ -300,14 +320,62 @@ export default function Dashboard() {
         if (data.success) {
           console.log(
             `Call scheduled successfully for ${selectedClient.name}:`,
-            data.conversation_id
+            data.conversation_id || data.callSid
           );
-          // Update client status to currently_calling
-          const updatedClients = clients.map((client) =>
-            client.id === selectedClient.id
-              ? { ...client, status: "currently_calling" as Status }
-              : client
+
+          // Update the clients state
+          setClientsList((prevClients) =>
+            prevClients.map((client) =>
+              client.id === selectedClient.id
+                ? { ...client, status: "currently_calling" as Status }
+                : client
+            )
           );
+
+          // Get the conversation ID
+          const conversationId = data.conversation_id || data.callSid;
+
+          // Poll for the conversation file
+          const checkForFile = async () => {
+            try {
+              const analysisResponse = await fetch(
+                `${ngrokUrl}/analyze-conversation/${conversationId}`,
+                {
+                  method: "GET",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                }
+              );
+
+              if (analysisResponse.ok) {
+                const analysisData = await analysisResponse.json();
+                console.log("Conversation Analysis:", analysisData);
+                return true; // File found and analyzed
+              } else if (analysisResponse.status === 404) {
+                console.log("Conversation file not found yet, will retry..."); // Add debug log
+                return false; // File not found yet
+              }
+            } catch (error) {
+              console.error("Error checking conversation:", error);
+              return false;
+            }
+          };
+
+          // Start polling
+          const pollInterval = setInterval(async () => {
+            const fileFound = await checkForFile();
+            if (fileFound) {
+              clearInterval(pollInterval);
+            }
+          }, 3000);
+
+          // Stop polling after 30 minutes
+          setTimeout(() => {
+            clearInterval(pollInterval);
+          }, 30 * 60 * 1000);
+
+          setSelectedClients([]);
         } else {
           throw new Error(`Failed to initiate call for ${selectedClient.name}`);
         }
@@ -368,7 +436,7 @@ export default function Dashboard() {
               <div className="flex items-center space-x-2">
                 <Users className="h-5 w-5" />
                 <span className="text-sm text-muted-foreground">
-                  {clients.length} Total Clients
+                  {clientsList.length} Total Clients
                 </span>
               </div>
             </div>
@@ -513,7 +581,7 @@ export default function Dashboard() {
             </TableHeader>
             <TableBody>
               {filteredClients.map((client) => (
-                <TableRow 
+                <TableRow
                   key={client.id}
                   className="cursor-pointer"
                   onClick={() => {
@@ -549,7 +617,10 @@ export default function Dashboard() {
         </div>
 
         {/* Interaction History Dialog */}
-        <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+        <Dialog
+          open={isHistoryDialogOpen}
+          onOpenChange={setIsHistoryDialogOpen}
+        >
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>
@@ -562,7 +633,8 @@ export default function Dashboard() {
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg">
-                        {interaction.type.charAt(0).toUpperCase() + interaction.type.slice(1)}
+                        {interaction.type.charAt(0).toUpperCase() +
+                          interaction.type.slice(1)}
                         {interaction.duration && ` - ${interaction.duration}`}
                       </CardTitle>
                       <span className="text-sm text-muted-foreground">
@@ -584,7 +656,8 @@ export default function Dashboard() {
                   </CardContent>
                 </Card>
               ))}
-              {(!selectedClientForHistory?.interactions || selectedClientForHistory.interactions.length === 0) && (
+              {(!selectedClientForHistory?.interactions ||
+                selectedClientForHistory.interactions.length === 0) && (
                 <div className="text-center text-muted-foreground py-4">
                   No interaction history available for this client.
                 </div>
