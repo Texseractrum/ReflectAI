@@ -6,6 +6,8 @@ import Twilio from 'twilio';
 import WebSocket from 'ws';
 import fs from 'fs'; // <-- Added for writing JSON files
 import path from 'path';
+import cors from '@fastify/cors';
+import OpenAI from 'openai';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -30,10 +32,23 @@ if (
   throw new Error('Missing required environment variables');
 }
 
+// Replace Anthropic env check with OpenAI
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+if (!OPENAI_API_KEY) {
+  console.error('Missing OPENAI_API_KEY environment variable');
+  throw new Error('Missing OPENAI_API_KEY environment variable');
+}
+
 // Initialize Fastify server
 const fastify = Fastify();
 fastify.register(fastifyFormBody);
 fastify.register(fastifyWs);
+fastify.register(cors, {
+  origin: '*', // For development. In production, specify your frontend domain
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+  credentials: true
+});
 
 const PORT = process.env.PORT || 8000;
 
@@ -59,46 +74,22 @@ function logEvent(callSid, speaker, message) {
 }
 
 function logToFile(conversationId, message) {
-  if (!conversationId) {
-    console.error('No conversationId provided for logging');
-    return;
+  if (!conversationId) return;
+
+  // Create logs directory in the project root
+  const logsDir = path.join(process.cwd(), 'logs');
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
   }
 
-  try {
-    // Create logs directory in the project root
-    const logsDir = path.join(process.cwd(), 'logs');
-    console.log('Logs directory path:', logsDir);
+  const logFile = path.join(logsDir, `${conversationId}.txt`);
+  const timestamp = new Date().toISOString();
+  const logMessage = `[${timestamp}] ${message}\n`;
 
-    if (!fs.existsSync(logsDir)) {
-      console.log('Creating logs directory...');
-      fs.mkdirSync(logsDir, { recursive: true });
-    }
-
-    const logFile = path.join(logsDir, `${conversationId}.txt`);
-    console.log('Writing to log file:', logFile);
-
-    const timestamp = new Date().toISOString();
-    const logMessage = `[${timestamp}] ${message}\n`;
-
-    // Use synchronous write to ensure message is written
-    fs.appendFileSync(logFile, logMessage, { encoding: 'utf8' });
-
-    // Verify file was written
-    if (fs.existsSync(logFile)) {
-      const stats = fs.statSync(logFile);
-      console.log(`Log file created/updated. Size: ${stats.size} bytes`);
-    } else {
-      console.error('Failed to verify log file creation');
-    }
-  } catch (error) {
-    console.error('Error writing to log file:', error);
-    console.error('Error details:', {
-      conversationId,
-      currentDirectory: process.cwd(),
-      error: error.message,
-      stack: error.stack
-    });
-  }
+  // Add debug logging
+  console.log(`Writing to log file: ${logFile}`);
+  
+  fs.appendFileSync(logFile, logMessage);
 }
 
 // Root route for health check
@@ -108,6 +99,11 @@ fastify.get('/', async (_, reply) => {
 
 // Initialize Twilio client
 const twilioClient = new Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+
+// Initialize OpenAI client instead of Anthropic
+const openai = new OpenAI({
+  apiKey: OPENAI_API_KEY,
+});
 
 // Helper function to get signed URL for authenticated conversations
 async function getSignedUrl() {
@@ -423,6 +419,82 @@ fastify.register(async (fastifyInstance) => {
       }
     });
   });
+});
+
+// Replace the analyze-conversation endpoint
+fastify.get('/analyze-conversation/:conversationId', async (request, reply) => {
+  try {
+    const { conversationId } = request.params;
+    const filePath = path.join(process.cwd(), `conversation-${conversationId}.json`);
+    
+    console.log('Looking for file:', filePath);
+    if (!fs.existsSync(filePath)) {
+      console.log('File not found:', filePath);
+      return reply.code(404).send({ error: 'Conversation not found' });
+    }
+
+    console.log('Reading conversation file...');
+    const conversationData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    console.log('Conversation data:', JSON.stringify(conversationData, null, 2));
+    
+    // Format conversation for analysis
+    const formattedConversation = conversationData.conversation
+      .map(entry => `${entry.speaker}: ${entry.message}`)
+      .join('\n');
+    console.log('Formatted conversation:', formattedConversation);
+
+    console.log('Calling OpenAI API...');
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4-turbo-preview",
+      messages: [{
+        role: "user",
+        content: `Analyze this customer service conversation and provide insights in JSON format. Focus on: 
+        1. Customer satisfaction
+        2. Key points discussed
+        3. Action items
+        4. Areas for improvement
+        
+        Conversation:
+        ${formattedConversation}
+        
+        INCREDIBLY IMPORTANT: Return ONLY the raw JSON without any markdown formatting or code blocks, in this exact structure:
+        {
+          "satisfaction_score": number from 1-10,
+          "key_points": string[],
+          "action_items": string[],
+          "areas_for_improvement": string[],
+          "summary": string
+        }`
+      }]
+    });
+
+    console.log('OpenAI response:', completion.choices[0].message.content);
+    
+    // Clean the response of markdown formatting
+    let cleanResponse = completion.choices[0].message.content;
+    cleanResponse = cleanResponse.replace(/```json\n?/, '').replace(/```\n?/, '');
+    
+    // Parse the cleaned response
+    const analysis = JSON.parse(cleanResponse.trim());
+    
+    // Save analysis to a new file
+    const analysisPath = path.join(process.cwd(), `analysis-${conversationId}.json`);
+    fs.writeFileSync(analysisPath, JSON.stringify(analysis, null, 2));
+
+    reply.send({
+      success: true,
+      analysis,
+      file_path: analysisPath
+    });
+
+  } catch (error) {
+    console.error('Detailed error:', error);
+    console.error('Error stack:', error.stack);
+    reply.code(500).send({
+      success: false,
+      error: error.message || 'Failed to analyze conversation'
+    });
+  }
 });
 
 // Start the Fastify server

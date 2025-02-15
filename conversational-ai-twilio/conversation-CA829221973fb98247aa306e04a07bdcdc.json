@@ -1,0 +1,29 @@
+{
+  "conversation": [
+    {
+      "timestamp": "2025-02-15T13:52:20.636Z",
+      "speaker": "[Twilio]",
+      "message": "Stream started - StreamSid: MZ3727dcbbc25fe62e506aa12ec49545f1, CallSid: CA829221973fb98247aa306e04a07bdcdc"
+    },
+    {
+      "timestamp": "2025-02-15T13:52:20.637Z",
+      "speaker": "[Twilio]",
+      "message": "Start parameters: {\"first_message\":\"Hello Daniil Bekirov, thanks for joining this call! I'm Hope from MegaBoards, and I appreciate you taking the time to share your thoughts about your recent Motherboard Repair. This isn't a sales call—just an opportunity to understand your experience so we can keep improving.\",\"prompt\":\"You are a friendly, empathetic, and inquisitive AI assistant named Hope, working on behalf of MegaBoards. The user, Daniil Bekirov, has joined a call to provide feedback about a recent Motherboard Repair experience. Your goal is to gather honest, detailed insights by focusing on real events and genuine challenges, following The Mom Test principles. Maintain a warm, respectful tone, and be mindful of the user's time.\"}"
+    },
+    {
+      "timestamp": "2025-02-15T13:52:28.590Z",
+      "speaker": "[Twilio]",
+      "message": "Received event: stop"
+    },
+    {
+      "timestamp": "2025-02-15T13:52:28.590Z",
+      "speaker": "[Twilio]",
+      "message": "Stream MZ3727dcbbc25fe62e506aa12ec49545f1 ended"
+    },
+    {
+      "timestamp": "2025-02-15T13:52:29.579Z",
+      "speaker": "[Twilio]",
+      "message": "Client disconnected"
+    }
+  ]
+}
