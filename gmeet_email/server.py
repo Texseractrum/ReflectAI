@@ -2,10 +2,8 @@ import smtplib
 import ssl
 
 from flask import Flask, request, jsonify
-from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
 
 # SMTP Server Credentials (replace with your own secure method of storing credentials)
 SMTP_HOST = "smtp.cloudmta.net"

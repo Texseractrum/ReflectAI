@@ -44,12 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 
-type Status =
-    | "waiting_reply"
-    | "received_feedback"
-    | "currently_calling"
-    | "complete"
-    | "to_be_processed";
+type Status = "waiting_reply" | "received_feedback" | "currently_calling";
 type SortDirection = "asc" | "desc" | null;
 
 interface Interaction {
@@ -76,12 +71,12 @@ interface Client {
 const clients: Client[] = [
     {
         id: 1,
-        name: "Daniil Bekirov",
-        description: "Motherboard Repair",
-        phone: "+447341366667",
-        email: "bekirov.aida@gmail.com",
+        name: "John Smith",
+        description: "Financial Advisory Services",
+        phone: "+1 (555) 123-4567",
+        email: "john@techsolutions.com",
         lastContact: "2024-03-15",
-        status: "to_be_processed",
+        status: "waiting_reply",
         interactions: [
             {
                 id: 1,
@@ -108,7 +103,7 @@ const clients: Client[] = [
         phone: "+1 (555) 987-6543",
         email: "sarah@digitaldynamics.com",
         lastContact: "2024-03-14",
-        status: "to_be_processed",
+        status: "received_feedback",
         interactions: [
             {
                 id: 1,
@@ -127,7 +122,7 @@ const clients: Client[] = [
         phone: "+1 (555) 456-7890",
         email: "michael@innovatelabs.com",
         lastContact: "2024-03-16",
-        status: "to_be_processed",
+        status: "currently_calling",
         interactions: [
             {
                 id: 1,
@@ -142,25 +137,17 @@ const clients: Client[] = [
 ];
 
 const statusConfig = {
-    to_be_processed: {
-        label: "To Be Processed",
-        color: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300",
-    },
     waiting_reply: {
         label: "Waiting Reply",
         color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
     },
     received_feedback: {
         label: "Received Feedback",
-        color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
+        color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
     },
     currently_calling: {
         label: "Currently Calling",
         color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-    },
-    complete: {
-        label: "Complete",
-        color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
     },
 };
 
@@ -179,7 +166,6 @@ export default function Dashboard() {
     const [selectedClientForHistory, setSelectedClientForHistory] =
         useState<Client | null>(null);
     const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
-    const [clientsList, setClientsList] = useState<Client[]>(clients);
 
     useEffect(() => {
         const storedData = localStorage.getItem("companyData");
@@ -197,7 +183,7 @@ export default function Dashboard() {
     };
 
     const getStatusCounts = () => {
-        return clientsList.reduce((acc, client) => {
+        return clients.reduce((acc, client) => {
             acc[client.status] = (acc[client.status] || 0) + 1;
             return acc;
         }, {} as Record<Status, number>);
@@ -221,8 +207,6 @@ export default function Dashboard() {
                 currently_calling: 1,
                 waiting_reply: 2,
                 received_feedback: 3,
-                to_be_processed: 4,
-                complete: 5,
             };
 
             const comparison = statusOrder[a.status] - statusOrder[b.status];
@@ -231,7 +215,7 @@ export default function Dashboard() {
     };
 
     const filteredClients = sortClients(
-        clientsList.filter((client) => {
+        clients.filter((client) => {
             const matchesSearch =
                 client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 client.description
@@ -248,166 +232,78 @@ export default function Dashboard() {
         })
     );
 
-    const handleSchedule = async (type: "meet" | "zoom" | "phone") => {
-        console.log("handleSchedule called with type:", type);
-
-        if (selectedClients.length === 0) {
-            console.log("No clients selected");
-            return;
-        }
-
-        // Only proceed if "phone" type is selected
-        if (type !== "phone") {
-            console.log("Only phone calls are currently supported");
-            return;
-        }
-
-        setIsDialogOpen(false);
-
-        // Get company data from localStorage
-        const storedData = localStorage.getItem("companyData");
-        const companyData = storedData ? JSON.parse(storedData) : null;
-        console.log("Company data:", companyData);
-
-        // Get ngrok URL from environment variable
-        const ngrokUrl = process.env.NEXT_PUBLIC_NGROK_URL;
-        console.log("Ngrok URL:", ngrokUrl);
-
-        if (!ngrokUrl) {
-            console.error("Ngrok URL not configured");
-            return;
-        }
-
-        // Process each selected client
-        for (const clientId of selectedClients) {
-            const selectedClient = clientsList.find(
-                (client) => client.id === clientId
+    const handleSchedule = async (
+        type: "meet" | "zoom" | "phone" | "email"
+    ) => {
+        if (type === "email") {
+            const selectedClientData = clients.filter((client) =>
+                selectedClients.includes(client.id)
             );
-            if (!selectedClient) {
-                console.log("Selected client not found:", clientId);
-                continue;
-            }
 
-            console.log("Processing client:", selectedClient);
+            for (const client of selectedClientData) {
+                try {
+                    const response = await fetch(
+                        "http://localhost:5001/send_email",
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({
+                                to: client.email,
+                                subject: "Follow-up from ReflectAI",
+                                message: `Dear ${client.name},\n\nThank you for your interest in our services. We would like to follow up on our previous conversation regarding ${client.description}.\n\nBest regards,\nReflectAI Team`,
+                                from_email: "customer@reflectai.dev",
+                            }),
+                        }
+                    );
 
-            try {
-                const payload = {
-                    prompt: `You are a friendly, empathetic, and inquisitive AI assistant named ${companyData?.agentName}, working on behalf of ${companyData?.companyName}. The user, ${selectedClient.name}, has joined a call to provide feedback about a recent ${selectedClient?.description} experience. Your goal is to gather honest, detailed insights by focusing on real events and genuine challenges, following The Mom Test principles. Maintain a warm, respectful tone, and be mindful of the user's time.`,
-                    first_message: `Hello ${selectedClient.name}, thanks for joining this call! I'm ${companyData?.agentName} from ${companyData?.companyName}, and I appreciate you taking the time to share your thoughts about your recent ${selectedClient?.description}. This isn't a sales call—just an opportunity to understand your experience so we can keep improving.`,
-                    number: selectedClient.phone,
-                };
+                    const result = await response.json();
+                    if (result.status === "success") {
+                        // Add a new interaction to track the email
+                        const newInteraction = {
+                            id: client.interactions
+                                ? Math.max(
+                                      ...client.interactions.map((i) => i.id)
+                                  ) + 1
+                                : 1,
+                            date: new Date().toISOString().split("T")[0],
+                            type: "email" as const,
+                            summary: "Follow-up email sent",
+                            outcome: "Pending response",
+                        };
 
-                console.log("Making API call to:", `${ngrokUrl}/outbound-call`);
-                console.log("With payload:", payload);
-
-                const response = await fetch(`${ngrokUrl}/outbound-call`, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(payload),
-                });
-
-                console.log("API response status:", response.status);
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error("Error response:", errorText);
-                    throw new Error(
-                        `Failed to schedule call for ${selectedClient.name}`
+                        // Update the client's interactions and last contact
+                        const clientIndex = clients.findIndex(
+                            (c) => c.id === client.id
+                        );
+                        if (clientIndex !== -1) {
+                            clients[clientIndex] = {
+                                ...clients[clientIndex],
+                                lastContact: new Date()
+                                    .toISOString()
+                                    .split("T")[0],
+                                status: "waiting_reply" as Status,
+                                interactions: [
+                                    ...(clients[clientIndex].interactions ||
+                                        []),
+                                    newInteraction,
+                                ],
+                            };
+                        }
+                    }
+                } catch (error) {
+                    console.error(
+                        `Failed to send email to ${client.email}:`,
+                        error
                     );
                 }
-
-                const data = await response.json();
-                console.log("API response data:", data);
-
-                if (data.success) {
-                    console.log(
-                        `Call scheduled successfully for ${selectedClient.name}:`,
-                        data.conversation_id || data.callSid
-                    );
-
-                    // Update the clients state
-                    setClientsList((prevClients) =>
-                        prevClients.map((client) =>
-                            client.id === selectedClient.id
-                                ? {
-                                      ...client,
-                                      status: "currently_calling" as Status,
-                                  }
-                                : client
-                        )
-                    );
-
-                    // Get the conversation ID
-                    const conversationId = data.conversation_id || data.callSid;
-
-                    // Poll for the conversation file
-                    const checkForFile = async () => {
-                        try {
-                            const analysisResponse = await fetch(
-                                `${ngrokUrl}/analyze-conversation/${conversationId}`,
-                                {
-                                    method: "GET",
-                                    headers: {
-                                        "Content-Type": "application/json",
-                                    },
-                                }
-                            );
-
-                            if (analysisResponse.ok) {
-                                const analysisData =
-                                    await analysisResponse.json();
-                                console.log(
-                                    "Conversation Analysis:",
-                                    analysisData
-                                );
-                                return true; // File found and analyzed
-                            } else if (analysisResponse.status === 404) {
-                                console.log(
-                                    "Conversation file not found yet, will retry..."
-                                ); // Add debug log
-                                return false; // File not found yet
-                            }
-                        } catch (error) {
-                            console.error(
-                                "Error checking conversation:",
-                                error
-                            );
-                            return false;
-                        }
-                    };
-
-                    // Start polling
-                    const pollInterval = setInterval(async () => {
-                        const fileFound = await checkForFile();
-                        if (fileFound) {
-                            clearInterval(pollInterval);
-                        }
-                    }, 3000);
-
-                    // Stop polling after 30 minutes
-                    setTimeout(() => {
-                        clearInterval(pollInterval);
-                    }, 30 * 60 * 1000);
-
-                    setSelectedClients([]);
-                } else {
-                    throw new Error(
-                        `Failed to initiate call for ${selectedClient.name}`
-                    );
-                }
-            } catch (error) {
-                console.error(
-                    `Error scheduling call for ${selectedClient.name}:`,
-                    error
-                );
-                // Add error notification here
             }
+            setIsDialogOpen(false);
+            return;
         }
-
-        // Clear selections after processing all clients
-        setSelectedClients([]);
+        console.log(`Scheduling ${type} calls for clients:`, selectedClients);
+        setIsDialogOpen(false);
     };
 
     const handleImport = () => {
@@ -469,7 +365,7 @@ export default function Dashboard() {
                             <div className="flex items-center space-x-2">
                                 <Users className="h-5 w-5" />
                                 <span className="text-sm text-muted-foreground">
-                                    {clientsList.length} Total Clients
+                                    {clients.length} Total Clients
                                 </span>
                             </div>
                         </div>
@@ -593,6 +489,23 @@ export default function Dashboard() {
                                         <CardContent>
                                             <CardDescription>
                                                 Schedule direct phone calls
+                                            </CardDescription>
+                                        </CardContent>
+                                    </Card>
+                                    <Card
+                                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                                        onClick={() => handleSchedule("email")}
+                                    >
+                                        <CardHeader className="flex flex-row items-center space-y-0 pb-2">
+                                            <Video className="h-4 w-4 mr-2" />
+                                            <CardTitle className="text-base">
+                                                Email
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <CardDescription>
+                                                Send follow-up emails to
+                                                selected clients
                                             </CardDescription>
                                         </CardContent>
                                     </Card>
