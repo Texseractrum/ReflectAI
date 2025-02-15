@@ -1,11 +1,11 @@
 import requests
 
-def make_outbound_call(ngrok_url, phone_number):
+def make_outbound_call(ngrok_url, phone_number, agent_name, business_name, service_provided, user_name):
     url = f"{ngrok_url}/outbound-call"
     agent_name = "Hope"
     business_name = "BigBoards"
     service_provided = "Motherboard Repair"
-    user_name = "Daniil"
+    user_name = "Vladimir"
     
     payload = {
         "prompt": (
@@ -31,7 +31,7 @@ def make_outbound_call(ngrok_url, phone_number):
 
 # Example usage
 if __name__ == "__main__":
-    ngrok_url = "https://4350-31-94-34-31.ngrok-free.app"  # Replace with your actual ngrok URL
+    ngrok_url = "https://dad6-77-241-76-112.ngrok-free.app"  # Replace with your actual ngrok URL
     phone_number = "+447341366667"  # Replace with the actual phone number
     
     success = make_outbound_call(ngrok_url, phone_number)
