@@ -2,8 +2,10 @@ import smtplib
 import ssl
 
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # SMTP Server Credentials (replace with your own secure method of storing credentials)
 SMTP_HOST = "smtp.cloudmta.net"
@@ -11,7 +13,8 @@ SMTP_PORT = 2525
 SMTP_USERNAME = "f2f731b2f948c506"
 SMTP_PASSWORD = "1FLqHDpjk7PtvjbDqLAzP2Lj"
 
-@app.route('/incoming_mails', methods=['POST'])
+
+@app.route("/incoming_mails", methods=["POST"])
 def cloudmailin_webhook():
     """
     This endpoint receives incoming emails from CloudMailin (or similar services)
@@ -28,8 +31,8 @@ def cloudmailin_webhook():
     message_id = data.get("headers", {}).get("message_id", "N/A")
     in_reply_to = data.get("headers", {}).get("in_reply_to", "N/A")
     references = data.get("headers", {}).get("references", "N/A")
-    subject = data.get('headers', {}).get('subject', 'No Subject')
-    from_email = data.get('envelope', {}).get('from', 'No Sender')
+    subject = data.get("headers", {}).get("subject", "No Subject")
+    from_email = data.get("envelope", {}).get("from", "No Sender")
 
     print("New Message:\n", new_message)
     print("\nMessage IDs:")
@@ -41,12 +44,12 @@ def cloudmailin_webhook():
     print(f"Subject: {subject}")
     print(f"From: {from_email}")
 
-    return jsonify(status='ok')
+    return jsonify(status="ok")
 
 
-@app.route('/send_email', methods=['POST'])
+@app.route("/send_email", methods=["POST"])
 def send_email():
-    """ Sends an email using SMTP with proper envelope sender formatting """
+    """Sends an email using SMTP with proper envelope sender formatting"""
 
     data = request.get_json()
     to_email = data.get("to")
@@ -55,7 +58,12 @@ def send_email():
     from_email = data.get("from_email", "customer@reflectai.dev")
 
     if not to_email or not email_body:
-        return jsonify({"status": "fail", "error": "Missing required fields (to and message)."}), 400
+        return (
+            jsonify(
+                {"status": "fail", "error": "Missing required fields (to and message)."}
+            ),
+            400,
+        )
 
     # Ensure From header is included correctly in message body
     message = f"""\
@@ -84,4 +92,4 @@ Subject: {subject}
 
 if __name__ == "__main__":
     # Run the Flask app
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    app.run(host="0.0.0.0", port=5001, debug=True)
