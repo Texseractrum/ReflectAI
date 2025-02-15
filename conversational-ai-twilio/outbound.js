@@ -6,6 +6,7 @@ import Twilio from 'twilio';
 import WebSocket from 'ws';
 import fs from 'fs'; // <-- Added for writing JSON files
 import path from 'path';
+import cors from '@fastify/cors';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -34,6 +35,12 @@ if (
 const fastify = Fastify();
 fastify.register(fastifyFormBody);
 fastify.register(fastifyWs);
+fastify.register(cors, {
+  origin: '*', // For development. In production, specify your frontend domain
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+  credentials: true
+});
 
 const PORT = process.env.PORT || 8000;
 
@@ -59,46 +66,22 @@ function logEvent(callSid, speaker, message) {
 }
 
 function logToFile(conversationId, message) {
-  if (!conversationId) {
-    console.error('No conversationId provided for logging');
-    return;
+  if (!conversationId) return;
+
+  // Create logs directory in the project root
+  const logsDir = path.join(process.cwd(), 'logs');
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
   }
 
-  try {
-    // Create logs directory in the project root
-    const logsDir = path.join(process.cwd(), 'logs');
-    console.log('Logs directory path:', logsDir);
+  const logFile = path.join(logsDir, `${conversationId}.txt`);
+  const timestamp = new Date().toISOString();
+  const logMessage = `[${timestamp}] ${message}\n`;
 
-    if (!fs.existsSync(logsDir)) {
-      console.log('Creating logs directory...');
-      fs.mkdirSync(logsDir, { recursive: true });
-    }
-
-    const logFile = path.join(logsDir, `${conversationId}.txt`);
-    console.log('Writing to log file:', logFile);
-
-    const timestamp = new Date().toISOString();
-    const logMessage = `[${timestamp}] ${message}\n`;
-
-    // Use synchronous write to ensure message is written
-    fs.appendFileSync(logFile, logMessage, { encoding: 'utf8' });
-
-    // Verify file was written
-    if (fs.existsSync(logFile)) {
-      const stats = fs.statSync(logFile);
-      console.log(`Log file created/updated. Size: ${stats.size} bytes`);
-    } else {
-      console.error('Failed to verify log file creation');
-    }
-  } catch (error) {
-    console.error('Error writing to log file:', error);
-    console.error('Error details:', {
-      conversationId,
-      currentDirectory: process.cwd(),
-      error: error.message,
-      stack: error.stack
-    });
-  }
+  // Add debug logging
+  console.log(`Writing to log file: ${logFile}`);
+  
+  fs.appendFileSync(logFile, logMessage);
 }
 
 // Root route for health check

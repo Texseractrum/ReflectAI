@@ -16,5 +16,9 @@
     "url": "https://github.com/Texseractrum/ReflectAI/issues"
   },
   "homepage": "https://github.com/Texseractrum/ReflectAI#readme",
-  "description": ""
+  "description": "",
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.0.1"
+  }
 }

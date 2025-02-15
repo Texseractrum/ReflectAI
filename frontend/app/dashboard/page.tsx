@@ -1,7 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Phone, Users, Calendar, Search, Video, PhoneCall, Filter, ArrowUpDown, Upload } from "lucide-react";
+import {
+  Phone,
+  Users,
+  Calendar,
+  Search,
+  Video,
+  PhoneCall,
+  Filter,
+  ArrowUpDown,
+  Upload,
+} from "lucide-react";
 import {
   Table,
   TableBody,
@@ -53,7 +63,7 @@ const clients: Client[] = [
     id: 1,
     name: "John Smith",
     description: "Financial Advisory Services",
-    phone: "+1 (555) 123-4567",
+    phone: "+447341366667",
     email: "john@techsolutions.com",
     lastContact: "2024-03-15",
     status: "waiting_reply",
@@ -81,7 +91,8 @@ const clients: Client[] = [
 const statusConfig = {
   waiting_reply: {
     label: "Waiting Reply",
-    color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
+    color:
+      "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
   },
   received_feedback: {
     label: "Received Feedback",
@@ -131,7 +142,7 @@ export default function Dashboard() {
   const statusCounts = getStatusCounts();
 
   const handleSort = () => {
-    setSortDirection(prev => {
+    setSortDirection((prev) => {
       if (prev === null) return "asc";
       if (prev === "asc") return "desc";
       return null;
@@ -140,14 +151,14 @@ export default function Dashboard() {
 
   const sortClients = (clientsToSort: Client[]) => {
     if (sortDirection === null) return clientsToSort;
-    
+
     return [...clientsToSort].sort((a, b) => {
       const statusOrder = {
         currently_calling: 1,
         waiting_reply: 2,
         received_feedback: 3,
       };
-      
+
       const comparison = statusOrder[a.status] - statusOrder[b.status];
       return sortDirection === "asc" ? comparison : -comparison;
     });
@@ -161,15 +172,107 @@ export default function Dashboard() {
         client.phone.includes(searchTerm) ||
         client.email.toLowerCase().includes(searchTerm.toLowerCase());
 
-      const matchesStatus = statusFilter.length === 0 || statusFilter.includes(client.status);
+      const matchesStatus =
+        statusFilter.length === 0 || statusFilter.includes(client.status);
 
       return matchesSearch && matchesStatus;
     })
   );
 
-  const handleSchedule = (type: 'meet' | 'zoom' | 'phone') => {
-    console.log(`Scheduling ${type} calls for clients:`, selectedClients);
+  const handleSchedule = async (type: "meet" | "zoom" | "phone") => {
+    console.log("handleSchedule called with type:", type);
+
+    if (selectedClients.length === 0) {
+      console.log("No clients selected");
+      return;
+    }
+
+    // Only proceed if "phone" type is selected
+    if (type !== "phone") {
+      console.log("Only phone calls are currently supported");
+      return;
+    }
+
     setIsDialogOpen(false);
+
+    // Get company data from localStorage
+    const storedData = localStorage.getItem("companyData");
+    const companyData = storedData ? JSON.parse(storedData) : null;
+    console.log("Company data:", companyData);
+
+    // Get ngrok URL from environment variable
+    const ngrokUrl = process.env.NEXT_PUBLIC_NGROK_URL;
+    console.log("Ngrok URL:", ngrokUrl);
+
+    if (!ngrokUrl) {
+      console.error("Ngrok URL not configured");
+      return;
+    }
+
+    // Process each selected client
+    for (const clientId of selectedClients) {
+      const selectedClient = clients.find((client) => client.id === clientId);
+      if (!selectedClient) {
+        console.log("Selected client not found:", clientId);
+        continue;
+      }
+
+      console.log("Processing client:", selectedClient);
+
+      try {
+        const payload = {
+          prompt: `You are a friendly, empathetic, and inquisitive AI assistant named ${companyData?.agentName}, working on behalf of ${companyData?.companyName}. The user, ${selectedClient.name}, has joined a call to provide feedback about a recent ${selectedClient?.description} experience. Your goal is to gather honest, detailed insights by focusing on real events and genuine challenges, following The Mom Test principles. Maintain a warm, respectful tone, and be mindful of the user's time.`,
+          first_message: `Hello ${selectedClient.name}, thanks for joining this call! I'm ${companyData?.agentName} from ${companyData?.companyName}, and I appreciate you taking the time to share your thoughts about your recent ${selectedClient?.description}. This isn't a sales call—just an opportunity to understand your experience so we can keep improving.`,
+          number: selectedClient.phone,
+        };
+
+        console.log("Making API call to:", `${ngrokUrl}/outbound-call`);
+        console.log("With payload:", payload);
+
+        const response = await fetch(`${ngrokUrl}/outbound-call`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+
+        console.log("API response status:", response.status);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Error response:", errorText);
+          throw new Error(`Failed to schedule call for ${selectedClient.name}`);
+        }
+
+        const data = await response.json();
+        console.log("API response data:", data);
+
+        if (data.success) {
+          console.log(
+            `Call scheduled successfully for ${selectedClient.name}:`,
+            data.conversation_id
+          );
+          // Update client status to currently_calling
+          const updatedClients = clients.map((client) =>
+            client.id === selectedClient.id
+              ? { ...client, status: "currently_calling" as Status }
+              : client
+          );
+        } else {
+          throw new Error(`Failed to initiate call for ${selectedClient.name}`);
+        }
+      } catch (error) {
+        console.error(
+          `Error scheduling call for ${selectedClient.name}:`,
+          error
+        );
+        // Add error notification here
+      }
+    }
+
+    // Clear selections after processing all clients
+    setSelectedClients([]);
   };
 
   const handleImport = () => {
@@ -204,7 +307,10 @@ export default function Dashboard() {
               <div className="flex items-center space-x-6">
                 {Object.entries(statusCounts).map(([status, count]) => (
                   <div key={status} className="flex items-center space-x-2">
-                    <Badge variant="secondary" className={statusConfig[status as Status].color}>
+                    <Badge
+                      variant="secondary"
+                      className={statusConfig[status as Status].color}
+                    >
                       {statusConfig[status as Status].label}: {count}
                     </Badge>
                   </div>
@@ -248,10 +354,10 @@ export default function Dashboard() {
                     key={status}
                     checked={statusFilter.includes(status)}
                     onCheckedChange={(checked) => {
-                      setStatusFilter(prev =>
+                      setStatusFilter((prev) =>
                         checked
                           ? [...prev, status]
-                          : prev.filter(s => s !== status)
+                          : prev.filter((s) => s !== status)
                       );
                     }}
                   >
@@ -280,31 +386,46 @@ export default function Dashboard() {
                   Selected clients: {selectedClients.length}
                 </p>
                 <div className="grid gap-4">
-                  <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSchedule('meet')}>
+                  <Card
+                    className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => handleSchedule("meet")}
+                  >
                     <CardHeader className="flex flex-row items-center space-y-0 pb-2">
                       <Video className="h-4 w-4 mr-2" />
                       <CardTitle className="text-base">Google Meet</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <CardDescription>Schedule video calls via Google Meet</CardDescription>
+                      <CardDescription>
+                        Schedule video calls via Google Meet
+                      </CardDescription>
                     </CardContent>
                   </Card>
-                  <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSchedule('zoom')}>
+                  <Card
+                    className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => handleSchedule("zoom")}
+                  >
                     <CardHeader className="flex flex-row items-center space-y-0 pb-2">
                       <Video className="h-4 w-4 mr-2" />
                       <CardTitle className="text-base">Zoom</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <CardDescription>Schedule video calls via Zoom</CardDescription>
+                      <CardDescription>
+                        Schedule video calls via Zoom
+                      </CardDescription>
                     </CardContent>
                   </Card>
-                  <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleSchedule('phone')}>
+                  <Card
+                    className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => handleSchedule("phone")}
+                  >
                     <CardHeader className="flex flex-row items-center space-y-0 pb-2">
                       <PhoneCall className="h-4 w-4 mr-2" />
                       <CardTitle className="text-base">Phone Call</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <CardDescription>Schedule direct phone calls</CardDescription>
+                      <CardDescription>
+                        Schedule direct phone calls
+                      </CardDescription>
                     </CardContent>
                   </Card>
                 </div>
@@ -332,7 +453,11 @@ export default function Dashboard() {
                     onClick={handleSort}
                   >
                     Status
-                    <ArrowUpDown className={`ml-2 h-4 w-4 ${sortDirection ? 'opacity-100' : 'opacity-50'}`} />
+                    <ArrowUpDown
+                      className={`ml-2 h-4 w-4 ${
+                        sortDirection ? "opacity-100" : "opacity-50"
+                      }`}
+                    />
                   </Button>
                 </TableHead>
               </TableRow>
