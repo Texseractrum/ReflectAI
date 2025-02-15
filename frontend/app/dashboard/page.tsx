@@ -37,6 +37,15 @@ import { Badge } from "@/components/ui/badge";
 type Status = "waiting_reply" | "received_feedback" | "currently_calling";
 type SortDirection = "asc" | "desc" | null;
 
+interface Interaction {
+  id: number;
+  date: string;
+  type: "call" | "email" | "meeting";
+  duration?: string;
+  summary: string;
+  outcome: string;
+}
+
 interface Client {
   id: number;
   name: string;
@@ -45,6 +54,7 @@ interface Client {
   email: string;
   lastContact: string;
   status: Status;
+  interactions?: Interaction[];
 }
 
 // Mock data - replace with actual data from your backend
@@ -57,6 +67,23 @@ const clients: Client[] = [
     email: "john@techsolutions.com",
     lastContact: "2024-03-15",
     status: "waiting_reply",
+    interactions: [
+      {
+        id: 1,
+        date: "2024-03-15",
+        type: "call",
+        duration: "15 minutes",
+        summary: "Discussed investment portfolio optimization",
+        outcome: "Client requested detailed proposal"
+      },
+      {
+        id: 2,
+        date: "2024-03-10",
+        type: "email",
+        summary: "Sent initial service offering details",
+        outcome: "Client expressed interest in financial planning services"
+      }
+    ]
   },
   {
     id: 2,
@@ -66,6 +93,16 @@ const clients: Client[] = [
     email: "sarah@digitaldynamics.com",
     lastContact: "2024-03-14",
     status: "received_feedback",
+    interactions: [
+      {
+        id: 1,
+        date: "2024-03-14",
+        type: "meeting",
+        duration: "45 minutes",
+        summary: "Reviewed marketing strategy proposal",
+        outcome: "Client approved the proposed plan"
+      }
+    ]
   },
   {
     id: 3,
@@ -75,7 +112,17 @@ const clients: Client[] = [
     email: "michael@innovatelabs.com",
     lastContact: "2024-03-16",
     status: "currently_calling",
-  },
+    interactions: [
+      {
+        id: 1,
+        date: "2024-03-16",
+        type: "call",
+        duration: "30 minutes",
+        summary: "Technical requirements gathering",
+        outcome: "In progress"
+      }
+    ]
+  }
 ];
 
 const statusConfig = {
@@ -105,6 +152,8 @@ export default function Dashboard() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<Status[]>([]);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const [selectedClientForHistory, setSelectedClientForHistory] = useState<Client | null>(null);
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
 
   useEffect(() => {
     const storedData = localStorage.getItem("companyData");
@@ -339,8 +388,15 @@ export default function Dashboard() {
             </TableHeader>
             <TableBody>
               {filteredClients.map((client) => (
-                <TableRow key={client.id}>
-                  <TableCell>
+                <TableRow 
+                  key={client.id}
+                  className="cursor-pointer"
+                  onClick={() => {
+                    setSelectedClientForHistory(client);
+                    setIsHistoryDialogOpen(true);
+                  }}
+                >
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selectedClients.includes(client.id)}
@@ -366,6 +422,51 @@ export default function Dashboard() {
             </TableBody>
           </Table>
         </div>
+
+        {/* Interaction History Dialog */}
+        <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>
+                Interaction History - {selectedClientForHistory?.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              {selectedClientForHistory?.interactions?.map((interaction) => (
+                <Card key={interaction.id}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg">
+                        {interaction.type.charAt(0).toUpperCase() + interaction.type.slice(1)}
+                        {interaction.duration && ` - ${interaction.duration}`}
+                      </CardTitle>
+                      <span className="text-sm text-muted-foreground">
+                        {interaction.date}
+                      </span>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <div>
+                        <span className="font-medium">Summary: </span>
+                        {interaction.summary}
+                      </div>
+                      <div>
+                        <span className="font-medium">Outcome: </span>
+                        {interaction.outcome}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+              {(!selectedClientForHistory?.interactions || selectedClientForHistory.interactions.length === 0) && (
+                <div className="text-center text-muted-foreground py-4">
+                  No interaction history available for this client.
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
