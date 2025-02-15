@@ -18,7 +18,9 @@
   "homepage": "https://github.com/Texseractrum/ReflectAI#readme",
   "description": "",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.3",
     "clsx": "^2.1.1",
+    "openai": "^4.85.1",
     "tailwind-merge": "^3.0.1"
   }
 }
