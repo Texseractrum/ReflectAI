@@ -52,6 +52,14 @@ type Status =
   | "to_be_processed";
 type SortDirection = "asc" | "desc" | null;
 
+interface Analysis {
+  satisfaction_score: number;
+  key_points: string[];
+  action_items: string[];
+  areas_for_improvement: string[];
+  summary: string;
+}
+
 interface Interaction {
   id: number;
   date: string;
@@ -59,6 +67,7 @@ interface Interaction {
   duration?: string;
   summary: string;
   outcome: string;
+  analysis?: Analysis;
 }
 
 interface Client {
@@ -320,61 +329,11 @@ export default function Dashboard() {
         if (data.success) {
           console.log(
             `Call scheduled successfully for ${selectedClient.name}:`,
-            data.conversation_id || data.callSid
+            data.callSid
           );
 
-          // Update the clients state
-          setClientsList((prevClients) =>
-            prevClients.map((client) =>
-              client.id === selectedClient.id
-                ? { ...client, status: "currently_calling" as Status }
-                : client
-            )
-          );
-
-          // Get the conversation ID
-          const conversationId = data.conversation_id || data.callSid;
-
-          // Poll for the conversation file
-          const checkForFile = async () => {
-            try {
-              const analysisResponse = await fetch(
-                `${ngrokUrl}/analyze-conversation/${conversationId}`,
-                {
-                  method: "GET",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                }
-              );
-
-              if (analysisResponse.ok) {
-                const analysisData = await analysisResponse.json();
-                console.log("Conversation Analysis:", analysisData);
-                return true; // File found and analyzed
-              } else if (analysisResponse.status === 404) {
-                console.log("Conversation file not found yet, will retry..."); // Add debug log
-                return false; // File not found yet
-              }
-            } catch (error) {
-              console.error("Error checking conversation:", error);
-              return false;
-            }
-          };
-
-          // Start polling
-          const pollInterval = setInterval(async () => {
-            const fileFound = await checkForFile();
-            if (fileFound) {
-              clearInterval(pollInterval);
-            }
-          }, 3000);
-
-          // Stop polling after 30 minutes
-          setTimeout(() => {
-            clearInterval(pollInterval);
-          }, 30 * 60 * 1000);
-
+          // Update client status and start polling for analysis
+          await updateClientStatus(selectedClient.id, data.callSid);
           setSelectedClients([]);
         } else {
           throw new Error(`Failed to initiate call for ${selectedClient.name}`);
@@ -395,6 +354,103 @@ export default function Dashboard() {
   const handleImport = () => {
     // Mock import functionality
     console.log("Importing database from file...");
+  };
+
+  // Add this function to handle status updates
+  const updateClientStatus = async (clientId: number, callSid: string) => {
+    const ngrokUrl = process.env.NEXT_PUBLIC_NGROK_URL;
+    if (!ngrokUrl) {
+      console.error("Ngrok URL not configured");
+      return;
+    }
+
+    // Update to currently_calling
+    setClientsList((prevClients) =>
+      prevClients.map((client) =>
+        client.id === clientId
+          ? { ...client, status: "currently_calling" as Status }
+          : client
+      )
+    );
+
+    const checkAnalysis = async () => {
+      try {
+        const response = await fetch(
+          `${ngrokUrl}/analyze-conversation/${callSid}`,
+          {
+            method: "GET",
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log("Received analysis data:", data);
+
+          if (data.success && data.analysis) {
+            // Create new interaction
+            const newInteraction: Interaction = {
+              id: Date.now(),
+              date: new Date().toISOString().split("T")[0],
+              type: "call",
+              duration: "AI Call",
+              summary: data.analysis.summary,
+              outcome: data.analysis.action_items.join("; "),
+              analysis: {
+                satisfaction_score: data.analysis.satisfaction_score,
+                key_points: data.analysis.key_points,
+                action_items: data.analysis.action_items,
+                areas_for_improvement: data.analysis.areas_for_improvement,
+                summary: data.analysis.summary,
+              },
+            };
+
+            // Update client's interactions
+            setClientsList((prevClients) =>
+              prevClients.map((client) =>
+                client.id === clientId
+                  ? {
+                      ...client,
+                      status: "received_feedback",
+                      lastContact: newInteraction.date,
+                      interactions: [
+                        newInteraction,
+                        ...(client.interactions || []),
+                      ],
+                    }
+                  : client
+              )
+            );
+            return true;
+          }
+        }
+        return false;
+      } catch (error) {
+        console.error("Error checking analysis:", error);
+        if (error instanceof Error) {
+          console.error("Error details:", {
+            message: error.message,
+            stack: error.stack,
+          });
+        }
+        return false;
+      }
+    };
+
+    // Start polling after a delay to allow call to complete
+    setTimeout(() => {
+      const pollInterval = setInterval(async () => {
+        const analysisComplete = await checkAnalysis();
+        if (analysisComplete) {
+          clearInterval(pollInterval);
+        }
+      }, 5000); // Check every 5 seconds
+
+      // Stop polling after 30 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+      }, 30 * 60 * 1000);
+    }, 10000); // Start polling 10 seconds after call initiation
   };
 
   return (
@@ -619,17 +675,31 @@ export default function Dashboard() {
         {/* Interaction History Dialog */}
         <Dialog
           open={isHistoryDialogOpen}
-          onOpenChange={setIsHistoryDialogOpen}
+          onOpenChange={(open) => {
+            if (!open && selectedClientForHistory) {
+              // Only update to complete if current status is received_feedback
+              setClientsList((prevClients) =>
+                prevClients.map((client) =>
+                  client.id === selectedClientForHistory.id &&
+                  client.status === "received_feedback"
+                    ? { ...client, status: "complete" as Status }
+                    : client
+                )
+              );
+            }
+            setIsHistoryDialogOpen(open);
+            setSelectedClientForHistory(null);
+          }}
         >
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader className="sticky top-0 bg-background z-10 pb-4 mb-4 border-b">
               <DialogTitle>
                 Interaction History - {selectedClientForHistory?.name}
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
+            <div className="space-y-4 p-1">
               {selectedClientForHistory?.interactions?.map((interaction) => (
-                <Card key={interaction.id}>
+                <Card key={interaction.id} className="shadow-sm">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg">
@@ -652,6 +722,42 @@ export default function Dashboard() {
                         <span className="font-medium">Outcome: </span>
                         {interaction.outcome}
                       </div>
+                      {interaction.analysis && (
+                        <div className="mt-4 pt-4 border-t">
+                          <div className="mb-2">
+                            <span className="font-medium">
+                              Satisfaction Score:{" "}
+                            </span>
+                            {interaction.analysis.satisfaction_score}/10
+                          </div>
+                          <div className="mb-2">
+                            <span className="font-medium">Key Points: </span>
+                            <ul className="list-disc pl-5 mt-1">
+                              {interaction.analysis.key_points.map(
+                                (point, i) => (
+                                  <li key={i} className="text-sm">
+                                    {point}
+                                  </li>
+                                )
+                              )}
+                            </ul>
+                          </div>
+                          <div className="mb-2">
+                            <span className="font-medium">
+                              Areas for Improvement:{" "}
+                            </span>
+                            <ul className="list-disc pl-5 mt-1">
+                              {interaction.analysis.areas_for_improvement.map(
+                                (area, i) => (
+                                  <li key={i} className="text-sm">
+                                    {area}
+                                  </li>
+                                )
+                              )}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

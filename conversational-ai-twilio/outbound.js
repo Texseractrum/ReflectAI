@@ -44,9 +44,9 @@ const fastify = Fastify();
 fastify.register(fastifyFormBody);
 fastify.register(fastifyWs);
 fastify.register(cors, {
-  origin: '*', // For development. In production, specify your frontend domain
+  origin: true,  // or specifically 'http://localhost:3000'
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 });
 
@@ -347,9 +347,10 @@ fastify.register(async (fastifyInstance) => {
     ws.on('message', (message) => {
       try {
         const msg = JSON.parse(message);
+        
+        // Log all non-media events
         if (msg.event !== 'media') {
           console.log(`[Twilio] Received event: ${msg.event}`);
-          logEvent(callSid, '[Twilio]', `Received event: ${msg.event}`);
         }
 
         switch (msg.event) {
@@ -357,18 +358,8 @@ fastify.register(async (fastifyInstance) => {
             streamSid = msg.start.streamSid;
             callSid = msg.start.callSid;
             customParameters = msg.start.customParameters;
-            console.log(
-              `[Twilio] Stream started - StreamSid: ${streamSid}, CallSid: ${callSid}`
-            );
-            logEvent(
-              callSid,
-              '[Twilio]',
-              `Stream started - StreamSid: ${streamSid}, CallSid: ${callSid}`
-            );
-            if (customParameters) {
-              console.log('[Twilio] Start parameters:', customParameters);
-              logEvent(callSid, '[Twilio]', `Start parameters: ${JSON.stringify(customParameters)}`);
-            }
+            console.log(`[Twilio] Stream started - StreamSid: ${streamSid}, CallSid: ${callSid}`);
+            logEvent(callSid, 'System', 'Call started');
             break;
 
           case 'media':
@@ -382,7 +373,19 @@ fastify.register(async (fastifyInstance) => {
 
           case 'stop':
             console.log(`[Twilio] Stream ${streamSid} ended`);
-            logEvent(callSid, '[Twilio]', `Stream ${streamSid} ended`);
+            logEvent(callSid, 'System', 'Call ended');
+            
+            // Save conversation immediately when call ends
+            if (callSid && callLogs[callSid]) {
+              const outputFile = `conversation-${callSid}.json`;
+              fs.writeFileSync(
+                outputFile,
+                JSON.stringify({ conversation: callLogs[callSid] }, null, 2),
+                'utf-8'
+              );
+              console.log(`[Server] Conversation saved for CallSid ${callSid}`);
+            }
+            
             if (elevenLabsWs?.readyState === WebSocket.OPEN) {
               elevenLabsWs.close();
             }
@@ -394,7 +397,6 @@ fastify.register(async (fastifyInstance) => {
         }
       } catch (error) {
         console.error('[Twilio] Error processing message:', error);
-        logEvent(callSid, '[Twilio]', `Error processing message: ${error.message}`);
       }
     });
 
@@ -407,6 +409,7 @@ fastify.register(async (fastifyInstance) => {
       }
 
       if (callSid && callLogs[callSid]) {
+        // Save the conversation
         const outputFile = `conversation-${callSid}.json`;
         fs.writeFileSync(
           outputFile,
@@ -415,6 +418,53 @@ fastify.register(async (fastifyInstance) => {
         );
         console.log(`[Server] Conversation for CallSid ${callSid} written to ${outputFile}`);
 
+        // Generate and save the summary
+        const generateSummary = async () => {
+          try {
+            const formattedConversation = callLogs[callSid]
+              .map(entry => `${entry.speaker}: ${entry.message}`)
+              .join('\n');
+
+            const completion = await openai.chat.completions.create({
+              model: "gpt-4-turbo-preview",
+              messages: [{
+                role: "user",
+                content: `Analyze this customer service conversation and provide insights. 
+                Conversation:
+                ${formattedConversation}
+                
+                Return ONLY the raw JSON in this exact structure NOT INCLUDING ANY MARKDOWN FORMATTING OR CODE BLOCKS:
+                {
+                  "satisfaction_score": number from 1-10,
+                  "key_points": string[],
+                  "action_items": string[],
+                  "areas_for_improvement": string[],
+                  "summary": string
+                }`
+              }]
+            });
+
+            // Clean and parse the response
+            const cleanResponse = completion.choices[0].message.content.trim();
+            const summary = JSON.parse(cleanResponse);
+            const summaryFile = `summary-${callSid}.json`;
+
+            // Save with the expected structure
+            fs.writeFileSync(
+              summaryFile,
+              JSON.stringify({
+                success: true,
+                analysis: summary
+              }, null, 2),
+              'utf-8'
+            );
+            console.log(`[Server] Summary for CallSid ${callSid} written to ${summaryFile}`);
+          } catch (error) {
+            console.error('[Server] Error generating summary:', error);
+          }
+        };
+
+        generateSummary();
         delete callLogs[callSid];
       }
     });
@@ -425,74 +475,29 @@ fastify.register(async (fastifyInstance) => {
 fastify.get('/analyze-conversation/:conversationId', async (request, reply) => {
   try {
     const { conversationId } = request.params;
-    const filePath = path.join(process.cwd(), `conversation-${conversationId}.json`);
+    const summaryPath = path.join(process.cwd(), `summary-${conversationId}.json`);
     
-    console.log('Looking for file:', filePath);
-    if (!fs.existsSync(filePath)) {
-      console.log('File not found:', filePath);
-      return reply.code(404).send({ error: 'Conversation not found' });
+    console.log('Looking for summary at:', summaryPath);
+    
+    if (!fs.existsSync(summaryPath)) {
+      console.log('Summary file not found');
+      return reply.code(404).send({ 
+        success: false,
+        error: 'Analysis not found'
+      });
     }
 
-    console.log('Reading conversation file...');
-    const conversationData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    console.log('Conversation data:', JSON.stringify(conversationData, null, 2));
-    
-    // Format conversation for analysis
-    const formattedConversation = conversationData.conversation
-      .map(entry => `${entry.speaker}: ${entry.message}`)
-      .join('\n');
-    console.log('Formatted conversation:', formattedConversation);
-
-    console.log('Calling OpenAI API...');
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
-      messages: [{
-        role: "user",
-        content: `Analyze this customer service conversation and provide insights in JSON format. Focus on: 
-        1. Customer satisfaction
-        2. Key points discussed
-        3. Action items
-        4. Areas for improvement
-        
-        Conversation:
-        ${formattedConversation}
-        
-        INCREDIBLY IMPORTANT: Return ONLY the raw JSON without any markdown formatting or code blocks, in this exact structure:
-        {
-          "satisfaction_score": number from 1-10,
-          "key_points": string[],
-          "action_items": string[],
-          "areas_for_improvement": string[],
-          "summary": string
-        }`
-      }]
-    });
-
-    console.log('OpenAI response:', completion.choices[0].message.content);
-    
-    // Clean the response of markdown formatting
-    let cleanResponse = completion.choices[0].message.content;
-    cleanResponse = cleanResponse.replace(/```json\n?/, '').replace(/```\n?/, '');
-    
-    // Parse the cleaned response
-    const analysis = JSON.parse(cleanResponse.trim());
-    
-    // Save analysis to a new file
-    const analysisPath = path.join(process.cwd(), `analysis-${conversationId}.json`);
-    fs.writeFileSync(analysisPath, JSON.stringify(analysis, null, 2));
-
-    reply.send({
-      success: true,
-      analysis,
-      file_path: analysisPath
-    });
+    // Read and return the file exactly as stored
+    const summaryData = fs.readFileSync(summaryPath, 'utf-8');
+    return reply
+      .type('application/json')
+      .send(summaryData);
 
   } catch (error) {
-    console.error('Detailed error:', error);
-    console.error('Error stack:', error.stack);
-    reply.code(500).send({
+    console.error('Error serving analysis:', error);
+    return reply.code(500).send({
       success: false,
-      error: error.message || 'Failed to analyze conversation'
+      error: 'Failed to serve analysis'
     });
   }
 });
