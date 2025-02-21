@@ -1,0 +1,20 @@
+{
+  "success": true,
+  "analysis": {
+    "satisfaction_score": 5,
+    "key_points": [
+      "The customer did not provide specific feedback on the Motherboard Repair experience.",
+      "The conversation was brief with no detailed insight shared.",
+      "The agent maintained a warm and respectful tone."
+    ],
+    "action_items": [
+      "Follow up with the customer to gather more detailed feedback.",
+      "Train agents to ask more open-ended, probing questions to elicit detailed feedback."
+    ],
+    "areas_for_improvement": [
+      "Need for more in-depth conversation to understand the customer's experience.",
+      "The conversation ended too quickly without gathering valuable feedback."
+    ],
+    "summary": "The conversation with the customer, Dan, was brief and lacked detailed feedback about the Motherboard Repair experience. Although the agent was courteous, the interaction did not yield insights that could be used for improvement. Follow-up and more effective engagement strategies are needed."
+  }
+}

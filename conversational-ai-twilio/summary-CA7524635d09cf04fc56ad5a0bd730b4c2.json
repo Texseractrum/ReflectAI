@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "analysis": {
+    "satisfaction_score": 1,
+    "key_points": [],
+    "action_items": [],
+    "areas_for_improvement": [
+      "Improve engagement strategies to prevent early call termination",
+      "Enhance training for conversational AIs to better manage customer responses"
+    ],
+    "summary": "The conversation was brief and did not achieve its goal of gathering feedback due to early termination by the user. This indicates a possible lack of engagement or interest from the user's side. There's a need to reassess how initial interactions are handled to increase user participation and ensure valuable feedback is collected."
+  }
+}

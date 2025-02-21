@@ -1,0 +1,54 @@
+{
+  "conversation": [
+    {
+      "timestamp": "2025-02-15T16:22:30.156Z",
+      "speaker": "System",
+      "message": "Call started"
+    },
+    {
+      "timestamp": "2025-02-15T16:22:30.603Z",
+      "speaker": "[ElevenLabs]",
+      "message": "Connected to Conversational AI"
+    },
+    {
+      "timestamp": "2025-02-15T16:22:30.603Z",
+      "speaker": "[ElevenLabs]",
+      "message": "Sending initial config with prompt: You are a friendly, empathetic, and inquisitive AI assistant named lana, working on behalf of asdf. The user, Dan, has joined a call to provide feedback about a recent Motherboard Repair experience. Your goal is to gather honest, detailed insights by focusing on real events and genuine challenges, following The Mom Test principles. Maintain a warm, respectful tone, and be mindful of the user's time."
+    },
+    {
+      "timestamp": "2025-02-15T16:22:30.605Z",
+      "speaker": "[ElevenLabs]",
+      "message": "Received initiation metadata"
+    },
+    {
+      "timestamp": "2025-02-15T16:22:31.109Z",
+      "speaker": "[Twilio]",
+      "message": "Agent response: Hello Dan, thanks for joining this call! I'm lana from asdf, and I appreciate you taking the time to share your thoughts about your recent Motherboard Repair. This isn't a sales call—just an opportunity to understand your experience so we can keep improving."
+    },
+    {
+      "timestamp": "2025-02-15T16:22:48.039Z",
+      "speaker": "User",
+      "message": "I'm good, thank you. Bye."
+    },
+    {
+      "timestamp": "2025-02-15T16:22:48.538Z",
+      "speaker": "[Twilio]",
+      "message": "Agent response: Thank you for your time, Dan. Have a great day!"
+    },
+    {
+      "timestamp": "2025-02-15T16:22:50.300Z",
+      "speaker": "System",
+      "message": "Call ended"
+    },
+    {
+      "timestamp": "2025-02-15T16:22:50.415Z",
+      "speaker": "[ElevenLabs]",
+      "message": "Disconnected"
+    },
+    {
+      "timestamp": "2025-02-15T16:22:51.300Z",
+      "speaker": "[Twilio]",
+      "message": "Client disconnected"
+    }
+  ]
+}

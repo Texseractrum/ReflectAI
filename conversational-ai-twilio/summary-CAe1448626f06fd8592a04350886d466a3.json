@@ -1,0 +1,14 @@
+{
+  "success": true,
+  "analysis": {
+    "satisfaction_score": 1,
+    "key_points": [],
+    "action_items": [],
+    "areas_for_improvement": [
+      "Improve engagement strategies to better retain customer interest",
+      "Develop techniques to handle customer disengagement more effectively",
+      "Enhance training for agents on how to encourage more detailed feedback"
+    ],
+    "summary": "The conversation ended almost immediately after it began, with the customer, Dan, expressing no interest in providing feedback beyond stating that 'Nothing' went well. There was no opportunity to delve deeper into the user's experience or to gather actionable insights. The interaction suggests a need for improved engagement strategies and more effective communication techniques to manage sudden customer disengagement."
+  }
+}

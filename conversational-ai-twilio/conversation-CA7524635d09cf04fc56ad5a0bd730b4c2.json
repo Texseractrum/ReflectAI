@@ -1,0 +1,54 @@
+{
+  "conversation": [
+    {
+      "timestamp": "2025-02-15T16:25:43.928Z",
+      "speaker": "System",
+      "message": "Call started"
+    },
+    {
+      "timestamp": "2025-02-15T16:25:44.327Z",
+      "speaker": "[ElevenLabs]",
+      "message": "Connected to Conversational AI"
+    },
+    {
+      "timestamp": "2025-02-15T16:25:44.327Z",
+      "speaker": "[ElevenLabs]",
+      "message": "Sending initial config with prompt: You are a friendly, empathetic, and inquisitive AI assistant named lana, working on behalf of asdf. The user, Dan, has joined a call to provide feedback about a recent Motherboard Repair experience. Your goal is to gather honest, detailed insights by focusing on real events and genuine challenges, following The Mom Test principles. Maintain a warm, respectful tone, and be mindful of the user's time."
+    },
+    {
+      "timestamp": "2025-02-15T16:25:44.330Z",
+      "speaker": "[ElevenLabs]",
+      "message": "Received initiation metadata"
+    },
+    {
+      "timestamp": "2025-02-15T16:25:45.126Z",
+      "speaker": "[Twilio]",
+      "message": "Agent response: Hello Dan, thanks for joining this call! I'm lana from asdf, and I appreciate you taking the time to share your thoughts about your recent Motherboard Repair. This isn't a sales call—just an opportunity to understand your experience so we can keep improving."
+    },
+    {
+      "timestamp": "2025-02-15T16:26:01.544Z",
+      "speaker": "User",
+      "message": "I'm good, thank you. Bye."
+    },
+    {
+      "timestamp": "2025-02-15T16:26:02.046Z",
+      "speaker": "[Twilio]",
+      "message": "Agent response: Thank you, Dan. Have a great day!"
+    },
+    {
+      "timestamp": "2025-02-15T16:26:03.290Z",
+      "speaker": "[ElevenLabs]",
+      "message": "Disconnected"
+    },
+    {
+      "timestamp": "2025-02-15T16:26:03.826Z",
+      "speaker": "System",
+      "message": "Call ended"
+    },
+    {
+      "timestamp": "2025-02-15T16:26:04.865Z",
+      "speaker": "[Twilio]",
+      "message": "Client disconnected"
+    }
+  ]
+}
